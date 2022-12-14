@@ -1,10 +1,13 @@
 const canvas = document.querySelector("canvas")
+let scoreGame = document.querySelector("#score")
 const ctx = canvas.getContext("2d")
 
 
 // * Tailles definis par le "style.css"
 canvas.width = canvas.clientWidth
 canvas.height = canvas.clientHeight
+
+console.log(canvas.height);
 
 // * Objet touches clavier
     // Par défaut "false" puisqu'aucune touche appuyée
@@ -31,6 +34,7 @@ class Player {
         }
 
         this.rotation = 0
+        this.opacity = 1
 
         const image = new Image()
         image.src = "./space.png"
@@ -53,7 +57,7 @@ class Player {
         // * On dessine le joueur
 
         ctx.save() // ? img en temps réel
-
+        ctx.globalAlpha = this.opacity
         // ! translate pour faire bouger le vaissau à partir du milieu
         ctx.translate(
             player.position.x + player.width/2, 
@@ -163,7 +167,7 @@ class Alien {
                 },
                 velocity : {
                     x : 0,
-                    y : 1
+                    y : 3
                 }
             }))
         }
@@ -275,12 +279,13 @@ class alienMissile {
     }
 }
 class Particule {
-    constructor({position, velocity, radius, color}) {
+    constructor({position, velocity, radius, color, fades}) {
         this.position = position
         this.velocity = velocity
         this.radius = radius
         this.color = color
         this.opacity = 1
+        this.fades = fades
     }
 
     draw() {
@@ -297,7 +302,7 @@ class Particule {
     update() {
         this.position.x += this.velocity.x
         this.position.y += this.velocity.y
-        if(this.opacity > 0) {
+        if(this.fades) {
             this.opacity -= 0.01
         }
         this.draw()
@@ -311,46 +316,80 @@ class Particule {
 // * Stocker missiles et particules dans un tableau
 let missiles
 let alienMissiles
-let particules
+let particules = []
+
 // * Avoir les aliens dès le départ
 let grids
 let player
 let lifes
 // * Pour ajout évènements après ittération
 let frames =0
-
+let game = {
+    over : false,
+    active : true
+}
+let score
 
 const init = () => {
-
     missiles = []
     alienMissiles = []
-    particules = []
     grids = [new Grid()]
     player = new Player()
     lifes = 3
+    score = 0 
+    scoreGame.innerHTML = `${score}`
     keys.ArrowLeft.pressed = false
     keys.ArrowRight.pressed = false
+    game.over = false
+    game.active = true
+}
+
+// * ====== Etoiles ======
+
+for(let p=0; p<100; p++) { 
+    particules.push(new Particule ( {
+        position : {
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height
+        }, 
+        velocity:{
+            x:0,
+            y:0.1
+        },
+        radius: Math.random()*2 + 0.5, 
+        color: "red"
+    }
+    ))
+
+    function getRandomColour(){
+        let red = Math.floor(Math.random() * (256 - 220) + 220);
+        let green = Math.floor(Math.random() * (256 - 150) + 150);
+        let blue = Math.floor(Math.random() * (256 - 150) + 150);
+        return "rgb("+red+","+green+"," +blue+" )";  
+    }
+
+    particules.forEach(particule => {
+        particule.color = getRandomColour()
+    })
 }
 
 init()
-
-
-
-
 
 // todo =====================
 // todo ===== ANIMATION ===== 
 // todo ===================== 
 function animationLoop() {
+    if(!game.active) return
     requestAnimationFrame(animationLoop)
     
     // * Remet à Zero avant l'update
     ctx.clearRect(0,0,canvas.width,canvas.height)
     player.update()
+
     // * On parcourt le tableau des missiles
     missiles.forEach((missile, index) => {
         if(missile.position.y + missile.height <= 0) {
-            // * si misilles sort du jeu, on le supprime du tableau apres chaque "setTimeout"
+            // * si misille sort du jeu, on le supprime du tableau apres chaque "setTimeout"
             setTimeout(() => {
                 missiles.splice(index,1)} 
                 ,0)
@@ -359,9 +398,6 @@ function animationLoop() {
                 missile.update()
             }
     })
-
-
-    
 
     grids.forEach((grid, indexGrid) => {
         grid.update() 
@@ -390,18 +426,26 @@ function animationLoop() {
                                 y: invader.position.y + invader.height/2
                             }, // ! au milieu de l'alien
                             velocity:{
+                                // ! (negatif pour sens inverse)
                                 x:(Math.random()-0.25)*2,
                                 y:(Math.random()-0.5)*2
                             },
                             radius: Math.random()*3+1, // ! pour avoir au moins 1 particule
-                            color: "red"
+                            color: "red",
+                            fades : true
                         }))
                     }
+                        
+                    
+                    console.log(score);      
 
                     setTimeout(() => {
                         // * si collision, alien + missile disparait
                         grid.invaders.splice(indexInvader,1)
                         missiles.splice(indexMissile,1)
+                        // ! score
+                        score += 100
+                        scoreGame.innerHTML = `${score}`
 
                         // * recalculer width du groupe d'aliens
                         if(grid.invaders.length > 0) {
@@ -434,7 +478,20 @@ function animationLoop() {
         alienMissile.position.y <= player.position.y + player.height &&
         alienMissile.position.x >= player.position.x &&
         alienMissile.position.x + alienMissile.width <= player.position.x + player.width) {
-            alienMissiles.splice(index,1)
+            setTimeout(() => {
+                alienMissiles.splice(index,1)
+                // player.opacity = 0
+                // game.over = true
+            },0)
+
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+// ! CONFIGURER NOMBRE DE VIES, FRAMES INVINVIBILITE !
+// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+            // setTimeout(() => {
+            //     game.active = false
+            // }, 2000) // ! 2000 miliseconds => 2s
+
             // ! Gerer les particules
             for(let p=0; p<22; p++) { //*12particuels
                 particules.push(new Particule ( {
@@ -447,7 +504,8 @@ function animationLoop() {
                         y:(Math.random()-0.5)*2
                     },
                     radius: Math.random()*2+1, 
-                    color: "white"
+                    color: "white",
+                    fades : true
                 }))
             }
             lostLife()
@@ -455,6 +513,11 @@ function animationLoop() {
     })
 
     particules.forEach((particule, indexParticule) => {
+        if(particule.position.y - particule.radius >= canvas.height) {
+            particule.position.x = Math.random() * canvas.width
+            particule.position.y = -particule.radius
+        }
+
         if(particule.opacity <=0) {
             particules.splice(indexParticule,1)
         } else {
@@ -487,6 +550,8 @@ const gameOver = () => {
     init()
 }
 
+// scorePoint()
+
 // todo =====================
 // todo === TOUCHE CLAVIER == 
 // todo ===================== 
@@ -494,6 +559,8 @@ const gameOver = () => {
 // * Evenement si touche gauche ou droite est pressée
 // ! {key} <-- destructuration de l'objet Event pour avoir le "key". Sinon on peut : "event.key"
 document.addEventListener("keydown", ({key}) => {
+    // * Empecher d'utiliser les touches
+    if(game.over) return
     switch(key) {
         // * nom de la key pressée
         case "ArrowLeft" :
@@ -511,6 +578,8 @@ document.addEventListener("keydown", ({key}) => {
 
 
 document.addEventListener("keyup", ({key}) => {
+    if(game.over) return
+
     switch(key) {
         // * nom de la key pressée
         case "ArrowLeft" :
